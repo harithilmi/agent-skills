@@ -14,7 +14,7 @@ agent: general-purpose
 
 ## Options
 
-Env vars: `PR_SHOTS_BROWSER` (`chrome`, `helium`, `brave`, `edge`, `arc`, `chromium`; default is the first one installed), `PR_SHOTS_PROFILE` (default: the profile used last, e.g. `"Profile 1"`), `PR_SHOTS_REPO` (default: the git repo you run it from).
+Env vars: `PR_SHOTS_BROWSER` (`chrome`, `helium`, `brave`, `edge`, `arc`, `chromium`; default is the first one installed), `PR_SHOTS_PROFILE` (default: the profile used last, e.g. `"Profile 1"`), `PR_SHOTS_REPO` (default: the git repo you run it from). `PR_SHOTS_COOKIES` (`<site>=<host>` pairs, comma-separated: copy the site's cookies to a local host, e.g. `https://dev.example.com=localhost` when the local app reuses the dev login; set it per repo in the project notes).
 
 ## Project notes
 
@@ -62,9 +62,11 @@ Scripts are in `scripts/` next to this file (this skill's base directory, given 
 
 Write down each shot: the page URL, the text that proves the change, and the state it needs (a tooltip open, a fee greater than 0, ...).
 
+- **Page shot before?** Run `grep -l '<url path>' <skill>/jobs/*.json`. If a job has it, copy that item's `url`, `setup`, `waitFor`, `css` and `area`. They worked before, so you do not need to read the code again.
+
 - **Data:** find it with one API query before you start anything. Check the project notes for API headers and limits.
 - **No data for that state:** mock it. Read the component's render condition first. Example: a row that shows only when there is a deposit needs `deposit` too, not only the field you care about.
-- **"Before" shots:** take them from the real old code: a server already on `main` (usually the main checkout), or a temporary `origin/main` worktree with its own server. Never fake "before" by editing the new code's responses in the browser. Mocks are for data (API responses) only, never for the code the PR changes.
+- **"Before" shots:** take them from the real old code: a server already on `main` (usually the main checkout), or an `origin/main` worktree with its own server. Keep that worktree and write its path in the project notes. Next time, reuse it with `git checkout --detach origin/main`. A new one costs about 2 minutes (`node_modules` clone and first compile). Never fake "before" by editing the new code's responses in the browser. Mocks are for data (API responses) only, never for the code the PR changes.
 - **Worktree server:** Turbopack rejects a symlinked `node_modules`. Make an APFS clone first: `cp -cR <main>/node_modules node_modules`. Put the symlink back after.
 
 ## 2. Write shots.json, serve it, shoot
