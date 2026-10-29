@@ -168,6 +168,13 @@ const swapBody = (pr, urls) => {
   const { chromium } = require(pwPath());
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${PORT}`);
   const ctx = browser.contexts()[0];
+  // PR_SHOTS_COOKIES="https://dev.example.com=localhost,..." copies a dev site's cookies to a local
+  // host, for local apps that reuse the dev site's login.
+  for (const pair of (process.env.PR_SHOTS_COOKIES ?? '').split(',').filter(Boolean)) {
+    const [site, host] = pair.split('=');
+    const cookies = await ctx.cookies(site);
+    await ctx.addCookies(cookies.map(({ name, value }) => ({ name, value, domain: host, path: '/' })));
+  }
   // Optional login copy for local apps, from shots.json `cookies`:
   // [{ "from": "https://dev.example.com", "name": "token", "to": "localhost" }]
   const { cookies = [] } = mode === 'shoot' ? JSON.parse(fs.readFileSync(path.join(dir, 'shots.json'), 'utf8')) : {};
