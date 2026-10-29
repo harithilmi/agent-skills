@@ -12,12 +12,9 @@ agent: general-purpose
 
 # PR screenshots
 
-## Setup (once)
+## Options
 
-- macOS with a Chromium browser: Chrome, Helium, Brave, Edge, Arc or Chromium. Be logged in to GitHub and the dev site in it.
-- `gh` CLI logged in. `sharp` and `playwright-core` in the repo's `node_modules`, or run `npx -y playwright-core --version` once.
-- The first run asks for Keychain access ("<Browser> Safe Storage"). Click **Always Allow**, so the copied cookies can be read.
-- Optional env vars: `PR_SHOTS_BROWSER` (`chrome`, `helium`, `brave`, `edge`, `arc`, `chromium`; default is the first one installed), `PR_SHOTS_PROFILE` (default: the profile you used last, e.g. `"Profile 1"`), `PR_SHOTS_REPO` (default: the git repo you run it from).
+Env vars: `PR_SHOTS_BROWSER` (`chrome`, `helium`, `brave`, `edge`, `arc`, `chromium`; default is the first one installed), `PR_SHOTS_PROFILE` (default: the profile used last, e.g. `"Profile 1"`), `PR_SHOTS_REPO` (default: the git repo you run it from).
 
 ## Project notes
 
