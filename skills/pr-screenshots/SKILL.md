@@ -8,6 +8,8 @@ metadata:
   author: harithilmi
 context: fork
 agent: general-purpose
+model: sonnet
+effort: medium
 ---
 
 # PR screenshots
