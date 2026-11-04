@@ -178,6 +178,13 @@ Use this mode when the PR changes a React Native app. Skip steps 0–2. `headles
   $AD screenshot <pr>-mood-before.png --pixel-density 3 --crop-on 'id="mood-card"'
   ```
 - **No `testID` on that branch (often `main`):** add `testID="..."` to the root element as an uncommitted one-line patch. Wait 3 seconds, shoot, then `git restore <file>`. Do the same on the PR branch, or commit the `testID` there.
+- **Reliable state, in this order:**
+  1. Shoot every "after" on the branch first. Then switch to `main` once and patch all the temporary `testID`s in one go. Keep that patch until the last "before" is done.
+  2. Run a full reload only after a branch switch. Fast Refresh picks up a `testID` patch by itself.
+  3. After a reload, wait for text that comes from the API (`$AD wait text "<api text>" 20000`), then run `$AD wait stable 2500 15000`. If you tap during the refetch, the re-render can close a sheet you just opened.
+  4. Tap once, then run `$AD wait stable 1500 10000` for the animation and the data.
+  5. Verify with `$AD wait 'id="..."'` only on elements that have a `testID`. Bottom-sheet content may be missing from the accessibility tree, so a text grep that finds nothing proves nothing. Without a `testID`, check one 250px image.
+  6. After 2 failed tries, stop and ask the user to set up the screen and reply "now". Then shoot once.
 - **Data:** the shot shows whatever the logged-in account has today. Before you shoot, check that it hits the state the PR changes, for example a value with no icon. If not, pick another date or record in the app.
 - **Partly visible:** `scroll --until` stops as soon as part of the element shows, and `--crop-on` then crops only that part (for example 1110x170 instead of 1110x480). Run `$AD scroll down 0.3` and shoot again. Compare each size with the other shot.
 - **Sizes:** the crop is tight on the element, with no padding. If before and after differ in height, pad the smaller one with `ffmpeg -vf pad=W:H:0:0:white`.
