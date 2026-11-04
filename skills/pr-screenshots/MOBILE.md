@@ -13,8 +13,9 @@ Use this mode when the PR changes a React Native app. Skip steps 0–2. `headles
   - **Check it applies to `main` before the brief:** `T=$(mktemp); GIT_INDEX_FILE=$T git read-tree main && GIT_INDEX_FILE=$T git apply --cached --check <patch>; rm -f $T`. It checks against `main` in a temp index: no checkout, no stash, so the working tree stays untouched. For `-3`, use a throwaway `git worktree add` instead. A PR that rewrites the same file makes the branch patch miss on `main`. If it fails, try a 3-way apply in a throwaway worktree. If that fails too, write a `main`-only patch by hand and pass both.
   - Pass the `AD` path from the main chat's `device_open`, so the fork skips that call (3.5k chars).
   - **`data`:** if the row needs data state, the main chat writes the exact GraphQL body (query + variables) and the restore body. The fork never reads schema or source to build them (that cost one fork 20+ calls).
-- **Budget:** about 10 calls for a shot row, 15 for a video row. Past that, or after 2 failed takes, stop and return `NEEDS STATE: <what is missing>`. Never write your own take script.
+- **Budget:** about 10 calls for a shot row (15 for a 4-shot flow row or a video row). Past that, or after 2 failed takes, stop and return `NEEDS STATE: <what is missing>`. Never write your own take script.
 - **Shoot each row in a fresh fork.** One row per invoke keeps the context small.
+- **Static by default.** Shoot PNGs, even for a navigation flow: shoot the key states in order (e.g. `[form, button] → [where it lands]`) and put them side by side in the row. Video only when the brief says `video`. Measured on one PR: a video row cost about 1M input-token equivalent (50–70 calls: record, trim, contact sheet, retake, upload); a static row cost 250–370k (13–20 calls).
 
 ## Shoot with `scripts/rn-shot.sh` (one call per shot)
 
@@ -23,7 +24,7 @@ AD=<path> ~/.claude/skills/pr-screenshots/scripts/rn-shot.sh /tmp/pr-shots/<pr>/
   [--reload] [--wait-text "<api text>"] [--tap <testID>]... [--full]
 ```
 
-**Video:** add `--record` and an `.mp4` out. It reaches `<testID>`, starts recording, runs the steps, stops, then cuts every frozen stretch to 0.8s (`HOLD=1.2` for slower) and scales to 590px. A 60s take becomes about 11s and under 1MB, ready to upload. The raw clip stays at `<out>.raw.mp4`. Steps run in order: `--tap <id>`, `--hold <id>` (long-press), `--back`. Prints `OK <file> <secs>s`. A video call takes 1–3 min (recording export): run it in the foreground with Bash `timeout: 600000`. Never background it and poll. Check it with `$AD record contact-sheet <file>` and `Read` that one PNG.
+**Video (only when the brief says `video`):** add `--record` and an `.mp4` out. It reaches `<testID>`, starts recording, runs the steps, stops, then cuts every frozen stretch to 0.8s (`HOLD=1.2` for slower) and scales to 590px. A 60s take becomes about 11s and under 1MB, ready to upload. The raw clip stays at `<out>.raw.mp4`. Steps run in order: `--tap <id>`, `--hold <id>` (long-press), `--back`. Prints `OK <file> <secs>s`. A video call takes 1–3 min (recording export): run it in the foreground with Bash `timeout: 600000`. Never background it and poll. Check it with `$AD record contact-sheet <file>` and `Read` that one PNG.
 
 It does the reload, LogBox dismiss, waits, scroll-to (from the top if needed), taps, one retry per step, crop, and the partly-visible nudge. It prints one line: `OK <file> WxH` or `FAIL <step>: <reason>`. Use `--reload` only after a branch switch or `git apply`. On `FAIL`, read the reason and fix that one thing. Don't take the steps over by hand.
 
