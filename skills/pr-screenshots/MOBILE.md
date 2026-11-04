@@ -10,6 +10,7 @@ Use this mode when the PR changes a React Native app. Skip steps 0–2. `headles
   Add the user's words ("retake row 2") and known traps.
   - Main chat fills in every testID and the tap path, so the fork never reads app source.
   - **Main patch:** commit testIDs on the branch in their own commit, then `git show <commit> > /tmp/pr-shots/<pr>/testids.patch`. The fork runs `git apply` on `main` and `git apply -R` after. Never `sed -i` a patch.
+  - **Check it applies to `main` before the brief:** `git stash -q; git checkout -q main && git apply --check <patch>; git checkout -q -; git stash pop -q` (skip the stash lines if the tree is clean). A PR that rewrites the same file makes the branch patch miss on `main`. If it fails, try `git apply -3 --check`. If that fails too, write a `main`-only patch by hand and pass both.
   - Pass the `AD` path from the main chat's `device_open`, so the fork skips that call (3.5k chars).
   - **`data`:** if the row needs data state, the main chat writes the exact GraphQL body (query + variables) and the restore body. The fork never reads schema or source to build them (that cost one fork 20+ calls).
 - **Budget:** about 10 calls for a shot row, 15 for a video row. Past that, or after 2 failed takes, stop and return `NEEDS STATE: <what is missing>`. Never write your own take script.
@@ -46,7 +47,7 @@ The fork can't wait for the user. So:
     - takeScreenshot: { path: /tmp/pr-shots/<pr>/<pr>-mood-before, cropOn: { id: mood-card } }
     ```
 - **One sim, one Metro, no worktree.** Switch code with `git checkout <branch>` (or `main`) in the repo Metro serves. Then force a full reload with `$AD metro reload` (`rn-shot.sh --reload` does it). Never `curl …/reload`: it prints the whole Expo manifest (~10k chars) into context. Fast Refresh can keep running the old bundle after a branch switch, and then the new `testID` is missing. A worktree would need its own `node_modules`, another Metro port and a re-pointed dev client. Not worth it.
-  - Uncommitted user changes: `git stash` first, `git stash pop` after. Ask the main chat before you touch them.
+  - Uncommitted user changes ride along through `git checkout`. Leave them alone. Stash only if `checkout` refuses, and `git stash pop` right after the shots.
 - **agent-device cheat-sheet** (don't run `help`): `press <sel> --settle` · `longpress <sel> 1500 --settle` · `back --in-app --settle` · `scroll down --until '<sel>'` · `scroll top` · `wait text "<t>" 20000` · `record start <f.mp4> --scope device` / `record stop` · `record contact-sheet <f.mp4> --out <png>`. Selectors: `id="…"`, `label="…"`. Coordinates only when the element has no `testID` and no label: then return `NEEDS TESTID <element>` instead of guessing pixels.
 - **Target by `testID`, not by guessing.** `--crop-on` takes only exact `id="..."` or `label="..."`. No prefix match. No snapshots, no rect math:
   ```bash
@@ -56,7 +57,7 @@ The fork can't wait for the user. So:
 - **No `testID` on that branch (often `main`):** `git apply` the main patch from the brief, shoot, then `git apply -R`.
 - **Reliable state, in this order:**
   1. Shoot every "after" on the branch first. Then switch to `main` once and patch all the temporary `testID`s in one go. Keep that patch until the last "before" is done.
-  2. Run a full reload only after a branch switch. Fast Refresh picks up a `testID` patch by itself.
+  2. Reload (`--reload`) after every branch switch and every `git apply`/`-R`. Fast Refresh may miss either.
   3. Waits after reload, taps and animations are in `rn-shot.sh`. Always pass `--wait-text` with text from the API: tapping during a refetch can close a sheet you just opened. Bottom-sheet content may be missing from the accessibility tree, so verify by `testID` only.
   4. After 2 failed tries, return `NEEDS STATE` (see above).
 - **Data:** the shot shows whatever the logged-in account has today. Before you shoot, check that it hits the state the PR changes, for example a value with no icon. If not, pick another date or record in the app.

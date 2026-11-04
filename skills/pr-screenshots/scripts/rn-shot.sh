@@ -37,16 +37,19 @@ ad() { "$AD" "$@" >"$log" 2>&1; }
 fail() { [ -n "$rec_on" ] && "$AD" record stop >/dev/null 2>&1; echo "FAIL $1: $(tail -c 300 "$log" | tr '\n' ' ')"; exit 1; }
 # Run once; on failure settle and retry once (covers refetch re-renders and slow animations).
 try() { local step=$1; shift; ad "$@" || { ad wait stable 1500 10000; ad "$@"; } || fail "$step"; }
+# Press, retry once only if the target is still on screen. Gone = the first press landed
+# (e.g. --settle timed out after navigating), and a blind retry would tap the next screen.
+press_step() { local id=$1; shift; ad "$@" && return; ad wait stable 1500 10000; ad wait "id=\"$id\"" 1000 || return 0; ad "$@" || fail "press $id"; }
 # LogBox blocks taps. No overlay -> command fails, which is fine.
 calm() { ad react-native dismiss-overlay; ad wait stable 1500 10000; }
 # scroll --until only searches downward, so retry from the top.
 reach() { ad scroll down --until "id=\"$1\"" || { ad scroll top; ad scroll down --until "id=\"$1\""; } || fail "reach $1"; }
-# Cut every frozen stretch down to $HOLD s, scale for upload. ponytail: animated spinners count as motion and stay.
+# Cut every frozen stretch down to $HOLD s, but keep $END_HOLD s of the final one (the end state is the evidence). Scale for upload. ponytail: animated spinners count as motion and stay.
 squash() {
-  local raw=$1 dst=$2 hold=${HOLD:-0.8} cuts
+  local raw=$1 dst=$2 hold=${HOLD:-0.8} end=${END_HOLD:-2.5} cuts
   cuts=$(ffmpeg -hide_banner -i "$raw" -vf "freezedetect=n=0.003:d=$hold" -map 0:v -f null - 2>&1 \
-    | awk -v h="$hold" '/freeze_start/{s=$NF} /freeze_end/{printf "+between(t,%.3f,%.3f)", s+h, $NF; s=""}
-      END{if(s!="") printf "+between(t,%.3f,99999)", s+h}')
+    | awk -v h="$hold" -v e="$end" '/freeze_start/{s=$NF} /freeze_end/{printf "+between(t,%.3f,%.3f)", s+h, $NF; s=""}
+      END{if(s!="") printf "+between(t,%.3f,99999)", s+e}')
   ffmpeg -v error -y -i "$raw" -vf "select='not(0${cuts})',setpts=N/FRAME_RATE/TB,scale=590:-2" \
     -c:v libx264 -crf 28 -pix_fmt yuv420p -an "$dst"
 }
@@ -61,8 +64,8 @@ run_steps() {
   for step in ${steps[@]+"${steps[@]}"}; do
     kind=${step%% *} id=${step#* }
     case $kind in
-      tap) reach "$id"; try "tap $id" press "id=\"$id\"" --settle ;;
-      hold) reach "$id"; try "hold $id" longpress "id=\"$id\"" 1500 --settle ;;
+      tap) reach "$id"; press_step "$id" press "id=\"$id\"" --settle ;;
+      hold) reach "$id"; press_step "$id" longpress "id=\"$id\"" 1500 --settle ;;
       back) try back back --in-app --settle ;;
     esac
     calm
@@ -75,7 +78,7 @@ if [ -n "$record" ]; then
   try "record start" record start "$raw" --scope device; rec_on=1
   sleep 1
   run_steps
-  sleep 1.5
+  sleep 3  # end state is the evidence; squash keeps END_HOLD s of it
   rec_on=''; try "record stop" record stop
   [ -s "$raw" ] || fail "record (no video written)"
   squash "$raw" "$out" || fail "squash"
