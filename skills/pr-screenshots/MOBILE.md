@@ -33,7 +33,7 @@ It does the reload, LogBox dismiss, waits, scroll-to (from the top if needed), t
 The fork can't wait for the user. So:
 
 - **Easy state** (scroll to a card on a tab): the fork reaches it alone.
-- **Data or account state** (subscription status, a note on a date, a profile field): never ask the user. Run the brief's `data` body with `scripts/rn-gql.sh <bundle> <endpoint> <body.json|-> [-H …]`. It takes the token from the app's storage and prints capped JSON. Then `--reload`. Run the restore body after the last shot.
+- **Data or account state** (subscription status, a note on a date, a profile field): never ask the user. Run the brief's `data` body with `scripts/rn-gql.sh <bundle> <endpoint> <body.json|-> [-H …]`. It takes the token from the app's storage and prints capped JSON. Then `$AD open <bundle> --relaunch --metro-port <port>` + `$AD wait text "<api text>" 30000`. `metro reload` is not enough after a data change: the screen keeps the old API result. Run the restore body after the last shot.
 - **Hard state** (sheet open mid-gesture, a flow with no API, a login that needs a password or OTP): don't try. Return `NEEDS STATE: <branch>, open <exact steps>`. The main chat relays it. The user replies "done", and the main chat re-invokes with `state ready`. Then the fork only crops (about 2 calls).
 - **Fork failed twice** on an easy state: return `NEEDS STATE` too. Never retry a third time.
 
