@@ -9,7 +9,9 @@
 #   --hold <testID>     scroll to + long-press 1.5s, then settle (step)
 #   --back              in-app back, then settle (step)
 #   --full              full-screen shot once <testID> is visible (no crop)
-#   --record            video: reach <testID>, start recording, run the steps, stop. <out> must be .mp4
+#   --record            video: reach <testID>, start recording, run the steps, stop. <out> must be .mp4.
+#                       Tool overhead freezes the screen 5-12s per step, so every still stretch is cut to HOLD
+#                       seconds (env, default 0.8) and the clip is scaled to 590px wide for GitHub. Raw: <out>.raw.mp4
 set -u
 AD=${AD:?set AD to the agent-device path from device_open}
 [ $# -ge 2 ] || { echo "FAIL args: rn-shot.sh <out.png> <testID> [--reload] [--wait-text t] [--tap|--hold id]... [--back] [--full] [--record]"; exit 2; }
@@ -39,6 +41,15 @@ try() { local step=$1; shift; ad "$@" || { ad wait stable 1500 10000; ad "$@"; }
 calm() { ad react-native dismiss-overlay; ad wait stable 1500 10000; }
 # scroll --until only searches downward, so retry from the top.
 reach() { ad scroll down --until "id=\"$1\"" || { ad scroll top; ad scroll down --until "id=\"$1\""; } || fail "reach $1"; }
+# Cut every frozen stretch down to $HOLD s, scale for upload. ponytail: animated spinners count as motion and stay.
+squash() {
+  local raw=$1 dst=$2 hold=${HOLD:-0.8} cuts
+  cuts=$(ffmpeg -hide_banner -i "$raw" -vf "freezedetect=n=0.003:d=$hold" -map 0:v -f null - 2>&1 \
+    | awk -v h="$hold" '/freeze_start/{s=$NF} /freeze_end/{printf "+between(t,%.3f,%.3f)", s+h, $NF; s=""}
+      END{if(s!="") printf "+between(t,%.3f,99999)", s+h}')
+  ffmpeg -v error -y -i "$raw" -vf "select='not(0${cuts})',setpts=N/FRAME_RATE/TB,scale=590:-2" \
+    -c:v libx264 -crf 28 -pix_fmt yuv420p -an "$dst"
+}
 height() { sips -g pixelHeight "$1" 2>/dev/null | awk '/pixelHeight/{print $2}' | grep . || echo 0; }
 
 if [ -n "$reload" ]; then try reload metro reload; ad wait stable 2500 20000; fi
@@ -55,18 +66,19 @@ run_steps() {
       back) try back back --in-app --settle ;;
     esac
     calm
-    [ -n "$rec_on" ] && sleep 1.2 # let viewers see each state
   done
 }
 
 if [ -n "$record" ]; then
   reach "$target"; ad wait stable 1000 8000
-  try "record start" record start "$out" --scope device; rec_on=1
+  raw="${out%.mp4}.raw.mp4"
+  try "record start" record start "$raw" --scope device; rec_on=1
   sleep 1
   run_steps
   sleep 1.5
   rec_on=''; try "record stop" record stop
-  [ -s "$out" ] || fail "record (no video written)"
+  [ -s "$raw" ] || fail "record (no video written)"
+  squash "$raw" "$out" || fail "squash"
   echo "OK $out $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$out" 2>/dev/null | cut -d. -f1)s"
   rm -f "$log"; exit 0
 fi
