@@ -1,9 +1,9 @@
 ---
 name: pr-screenshots
 description: >-
-  Use when the user asks for PR screenshots ("add ss", "before/after"), or right after creating a UI PR of a web app: suggest adding them. Pass the PR numbers and the user's words (e.g. "retake") in args, plus dev server ports, test data or mocks if known.
+  Use when the user asks for PR screenshots ("add ss", "before/after"), or right after creating a UI PR of a web or React Native app: suggest adding them. Pass the PR numbers and the user's words (e.g. "retake") in args, plus dev server ports, test data or mocks if known.
 compatibility: >-
-  Requires macOS, a Chromium browser (Chrome, Helium, Brave, Edge, Arc or Chromium) logged in to GitHub, the gh CLI, Node, and sharp + playwright-core (repo node_modules or npx cache). The terminal needs Full Disk Access.
+  Requires macOS, a Chromium browser (Chrome, Helium, Brave, Edge, Arc or Chromium) logged in to GitHub, the gh CLI, Node, and sharp + playwright-core (repo node_modules or npx cache). The terminal needs Full Disk Access. Mobile mode: an iOS Simulator or Android Emulator, and either the T3 Code device tools or Maestro.
 metadata:
   author: harithilmi
 context: fork
@@ -157,6 +157,33 @@ Gotchas from past runs:
 - `Read` only the contact sheet, never a full-size PNG (a 2000 px shot costs about 3x the tokens). To check a detail, crop and resize with sharp first.
 
 If a tool call comes back "interrupted", look at the files before you run it again. The job usually finished.
+
+## Mobile mode (React Native on a simulator)
+
+Use this mode when the PR changes a React Native app. Skip steps 0–2. `headless.cjs shoot` is for web only. Step 3 and `publish` still apply.
+
+- **Driver:** use the T3 Code device tools. Call `device_list`, then `device_open` with its `hostId` and `id`. Every tap, scroll and screenshot goes through the `agent-device` command it returns (`$AD` below). Never use `simctl` or `adb` for input.
+  - **Maestro** (`~/.maestro/bin/maestro`) is the fallback, only when the device tools are missing. It is not headless: it drives the same visible sim. On one shot it was about 2× slower (20s against 11s) for the same tokens. Its errors are also buried in `~/.maestro/tests/<run>/commands-*.json`. Write a flow without `launchApp` and run `maestro test flow.yaml 2>&1 | tail -3`. Maestro adds `.png` to `path`.
+    ```yaml
+    appId: <bundle id>
+    ---
+    - scrollUntilVisible: { element: { id: mood-card } }
+    - takeScreenshot: { path: /tmp/pr-shots/<pr>/<pr>-mood-before, cropOn: { id: mood-card } }
+    ```
+- **One sim, one Metro, no worktree.** Switch code with `git checkout <branch>` (or `main`) in the repo Metro serves. Then force a full reload: `curl -X POST localhost:8081/reload`, then wait 8 seconds. Fast Refresh can keep running the old bundle after a branch switch, and then the new `testID` is missing. A worktree would need its own `node_modules`, another Metro port and a re-pointed dev client. Not worth it.
+  - Uncommitted user changes: `git stash` first, `git stash pop` after. Ask the main chat before you touch them.
+- **Target by `testID`, not by guessing.** `--crop-on` takes only exact `id="..."` or `label="..."`. No prefix match. No snapshots, no rect math:
+  ```bash
+  $AD scroll top; $AD scroll down --until 'id="mood-card"'
+  $AD screenshot <pr>-mood-before.png --pixel-density 3 --crop-on 'id="mood-card"'
+  ```
+- **No `testID` on that branch (often `main`):** add `testID="..."` to the root element as an uncommitted one-line patch. Wait 3 seconds, shoot, then `git restore <file>`. Do the same on the PR branch, or commit the `testID` there.
+- **Data:** the shot shows whatever the logged-in account has today. Before you shoot, check that it hits the state the PR changes, for example a value with no icon. If not, pick another date or record in the app.
+- **Partly visible:** `scroll --until` stops as soon as part of the element shows, and `--crop-on` then crops only that part (for example 1110x170 instead of 1110x480). Run `$AD scroll down 0.3` and shoot again. Compare each size with the other shot.
+- **Sizes:** the crop is tight on the element, with no padding. If before and after differ in height, pad the smaller one with `ffmpeg -vf pad=W:H:0:0:white`.
+- **Check:** use one tile. `ffmpeg -i b.png -i a.png -filter_complex "[0]scale=500:-1[a];[1]scale=500:-1[b];[a][b]hstack" pair.png`. `Read` only `pair.png`.
+- **LogBox** dev warnings sit at the screen bottom. Element crops avoid them. For full-screen shots, dismiss them first.
+- **Upload:** name files `<pr>-<name>-before.png` and `<pr>-<name>-after.png`, then run `headless.cjs publish <pr> <dir>`. Mobile shots have no `jobs/<pr>.json` entry, so every shot comes back in `notSwapped` with its URL. Write the Before | After table in the PR body by hand with `gh pr edit --body-file`. `publish` adds "The red boxes show the changed parts." Delete that line, since mobile shots have no boxes.
 
 ## 3. Check with one image, once
 
