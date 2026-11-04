@@ -15,7 +15,8 @@ Use this mode when the PR changes a React Native app. Skip steps 0–2. `headles
 The fork can't wait for the user. So:
 
 - **Easy state** (scroll to a card on a tab): the fork reaches it alone.
-- **Hard state** (sheet open, dialog showing, deep nav, other account, specific date): don't try. Return `NEEDS STATE: <branch>, open <exact steps>`. The main chat relays it. The user replies "done", and the main chat re-invokes with `state ready`. Then the fork only crops (about 2 calls).
+- **Data or account state** (pregnancy status, a note on a date, a profile field): never ask the user. Mutate it through the app's API (GraphQL/REST) with the app's own token, then reload. Find the token in the app's storage (`xcrun simctl get_app_container <device> <bundle> data`, then grep the MMKV/AsyncStorage files) and the endpoint in `.env`. Put it back after the shots if the user cares about it.
+- **Hard state** (sheet open mid-gesture, a flow with no API, a login that needs a password or OTP): don't try. Return `NEEDS STATE: <branch>, open <exact steps>`. The main chat relays it. The user replies "done", and the main chat re-invokes with `state ready`. Then the fork only crops (about 2 calls).
 - **Fork failed twice** on an easy state: return `NEEDS STATE` too. Never retry a third time.
 
 - **Driver:** use the T3 Code device tools. Call `device_list`, then `device_open` with its `hostId` and `id`. Every tap, scroll and screenshot goes through the `agent-device` command it returns (`$AD` below). Never use `simctl` or `adb` for input.
