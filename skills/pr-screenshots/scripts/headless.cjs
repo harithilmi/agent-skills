@@ -3,7 +3,7 @@
 //   node headless.cjs upload <dir> <pr-url>   (dir has manifest.json)
 //   node headless.cjs fresh                   (copy the login cookies again and restart)
 //   node headless.cjs retake  <dir> <out...>  (shoot saved items again, from jobs/<pr>.json)
-//   node headless.cjs publish <pr> <dir>      (upload <dir>/<pr>-*.png, swap them into the PR body by alt)
+//   node headless.cjs publish <pr> <dir>      (upload <dir>/<pr>-*.png|mp4, swap them into the PR body by alt)
 // Run it from inside the repo (or set PR_SHOTS_REPO). Every ok item is saved to ../jobs/<pr>.json
 // (pr = leading digits of `out`), so a retake needs no rebuild.
 // The headless browser uses a copy of your profile's cookies and storage in ~/.pr-shots-browser
@@ -150,7 +150,7 @@ const swapBody = (pr, urls) => {
   let pr;
   if (mode === 'publish') {
     [pr, dir] = [dir, prUrl];
-    const files = fs.readdirSync(dir).filter((f) => f.startsWith(`${pr}-`) && f.endsWith('.png'));
+    const files = fs.readdirSync(dir).filter((f) => f.startsWith(`${pr}-`) && /\.(png|mp4)$/.test(f));
     fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(files));
     prUrl = execSync(`gh pr view ${pr} --json url --jq .url`, { cwd: REPO, encoding: 'utf8' }).trim();
   }
