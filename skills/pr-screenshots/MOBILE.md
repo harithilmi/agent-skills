@@ -6,11 +6,13 @@ Use this mode when the PR changes a React Native app. Skip steps 0–2. `headles
 
 - **Main chat never drives the sim.** Each tap re-sends its whole context (100k+), so one shot pair cost $1.30–1.70 that way. Invoke this skill instead: it forks on Sonnet with a small context.
 - **Brief (skill args)**, one line per row:
-  `<pr> | AD <agent-device path> | bundle <id> | main patch <file> | row <n> <name>: <screen>, testID <id>, taps <id,id>, wait-text <api text>, state <what must show>, data <date/record>`
+  `<pr> | AD <agent-device path> | bundle <id> | main patch <file> | gql <endpoint> <-H headers> | row <n> <name>: <screen>, testID <id>, taps <id,id>, wait-text <api text>, state <what must show>, data <setup + restore>`
   Add the user's words ("retake row 2") and known traps.
   - Main chat fills in every testID and the tap path, so the fork never reads app source.
   - **Main patch:** commit testIDs on the branch in their own commit, then `git show <commit> > /tmp/pr-shots/<pr>/testids.patch`. The fork runs `git apply` on `main` and `git apply -R` after. Never `sed -i` a patch.
   - Pass the `AD` path from the main chat's `device_open`, so the fork skips that call (3.5k chars).
+  - **`data`:** if the row needs data state, the main chat writes the exact GraphQL body (query + variables) and the restore body. The fork never reads schema or source to build them (that cost one fork 20+ calls).
+- **Budget:** about 10 calls for a shot row, 15 for a video row. Past that, or after 2 failed takes, stop and return `NEEDS STATE: <what is missing>`. Never write your own take script.
 - **Shoot each row in a fresh fork.** One row per invoke keeps the context small.
 
 ## Shoot with `scripts/rn-shot.sh` (one call per shot)
@@ -19,6 +21,8 @@ Use this mode when the PR changes a React Native app. Skip steps 0–2. `headles
 AD=<path> scripts/rn-shot.sh /tmp/pr-shots/<pr>/<pr>-<name>-after.png <testID> \
   [--reload] [--wait-text "<api text>"] [--tap <testID>]... [--full]
 ```
+
+**Video:** add `--record` and an `.mp4` out. It reaches `<testID>`, starts recording, runs the steps, holds each state 1.2s, stops. Steps run in order: `--tap <id>`, `--hold <id>` (long-press), `--back`. Prints `OK <file> <secs>s`. Check it with `$AD record contact-sheet <file>` and `Read` that one PNG.
 
 It does the reload, LogBox dismiss, waits, scroll-to (from the top if needed), taps, one retry per step, crop, and the partly-visible nudge. It prints one line: `OK <file> WxH` or `FAIL <step>: <reason>`. Use `--reload` only after a branch switch or `git apply`. On `FAIL`, read the reason and fix that one thing. Don't take the steps over by hand.
 
@@ -29,7 +33,7 @@ It does the reload, LogBox dismiss, waits, scroll-to (from the top if needed), t
 The fork can't wait for the user. So:
 
 - **Easy state** (scroll to a card on a tab): the fork reaches it alone.
-- **Data or account state** (subscription status, a note on a date, a profile field): never ask the user. Mutate it through the app's API (GraphQL/REST) with the app's own token, then reload. Find the token in the app's storage (`xcrun simctl get_app_container <device> <bundle> data`, then grep the MMKV/AsyncStorage files) and the endpoint in `.env`. Put it back after the shots if the user cares about it.
+- **Data or account state** (subscription status, a note on a date, a profile field): never ask the user. Run the brief's `data` body with `scripts/rn-gql.sh <bundle> <endpoint> <body.json|-> [-H …]`. It takes the token from the app's storage and prints capped JSON. Then `--reload`. Run the restore body after the last shot.
 - **Hard state** (sheet open mid-gesture, a flow with no API, a login that needs a password or OTP): don't try. Return `NEEDS STATE: <branch>, open <exact steps>`. The main chat relays it. The user replies "done", and the main chat re-invokes with `state ready`. Then the fork only crops (about 2 calls).
 - **Fork failed twice** on an easy state: return `NEEDS STATE` too. Never retry a third time.
 
@@ -43,6 +47,7 @@ The fork can't wait for the user. So:
     ```
 - **One sim, one Metro, no worktree.** Switch code with `git checkout <branch>` (or `main`) in the repo Metro serves. Then force a full reload with `$AD metro reload` (`rn-shot.sh --reload` does it). Never `curl …/reload`: it prints the whole Expo manifest (~10k chars) into context. Fast Refresh can keep running the old bundle after a branch switch, and then the new `testID` is missing. A worktree would need its own `node_modules`, another Metro port and a re-pointed dev client. Not worth it.
   - Uncommitted user changes: `git stash` first, `git stash pop` after. Ask the main chat before you touch them.
+- **agent-device cheat-sheet** (don't run `help`): `press <sel> --settle` · `longpress <sel> 1500 --settle` · `back --in-app --settle` · `scroll down --until '<sel>'` · `scroll top` · `wait text "<t>" 20000` · `record start <f.mp4> --scope device` / `record stop` · `record contact-sheet <f.mp4> --out <png>`. Selectors: `id="…"`, `label="…"`. Coordinates only when the element has no `testID` and no label: then return `NEEDS TESTID <element>` instead of guessing pixels.
 - **Target by `testID`, not by guessing.** `--crop-on` takes only exact `id="..."` or `label="..."`. No prefix match. No snapshots, no rect math:
   ```bash
   $AD scroll top; $AD scroll down --until 'id="mood-card"'
