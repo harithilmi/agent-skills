@@ -22,7 +22,7 @@ AD=<path> ~/.claude/skills/pr-screenshots/scripts/rn-shot.sh /tmp/pr-shots/<pr>/
   [--reload] [--wait-text "<api text>"] [--tap <testID>]... [--full]
 ```
 
-**Video:** add `--record` and an `.mp4` out. It reaches `<testID>`, starts recording, runs the steps, holds each state 1.2s, stops. Steps run in order: `--tap <id>`, `--hold <id>` (long-press), `--back`. Prints `OK <file> <secs>s`. A video call takes 1–3 min (recording export): run it in the foreground with Bash `timeout: 600000`. Never background it and poll. Check it with `$AD record contact-sheet <file>` and `Read` that one PNG.
+**Video:** add `--record` and an `.mp4` out. It reaches `<testID>`, starts recording, runs the steps, stops, then cuts every frozen stretch to 0.8s (`HOLD=1.2` for slower) and scales to 590px. A 60s take becomes about 11s and under 1MB, ready to upload. The raw clip stays at `<out>.raw.mp4`. Steps run in order: `--tap <id>`, `--hold <id>` (long-press), `--back`. Prints `OK <file> <secs>s`. A video call takes 1–3 min (recording export): run it in the foreground with Bash `timeout: 600000`. Never background it and poll. Check it with `$AD record contact-sheet <file>` and `Read` that one PNG.
 
 It does the reload, LogBox dismiss, waits, scroll-to (from the top if needed), taps, one retry per step, crop, and the partly-visible nudge. It prints one line: `OK <file> WxH` or `FAIL <step>: <reason>`. Use `--reload` only after a branch switch or `git apply`. On `FAIL`, read the reason and fix that one thing. Don't take the steps over by hand.
 
