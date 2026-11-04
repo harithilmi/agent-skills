@@ -23,13 +23,17 @@ async (page) => {
     const res = await page.request.get(base + encodeURIComponent(name));
     if (!res.ok()) { out[name] = 'HTTP ' + res.status(); continue; }
     const buffer = await res.body();
-    const key = name.replace(/\.png$/, '');
+    const key = name.replace(/\.(png|mp4)$/, '');
+    const isVideo = name.endsWith('.mp4');
+    // Videos come back as a bare URL line, not <img alt>: take the first URL that wasn't there before.
+    const allUrls = () => ta.inputValue().then((v) => v.match(/https:\/\/github\.com\/user-attachments\/assets\/[\w-]+/g) ?? []);
+    const seen = new Set(await allUrls());
     out[name] = 'timeout';
     // Retry once if GitHub drops the upload.
     for (let attempt = 0; attempt < 2 && out[name] === 'timeout'; attempt++) {
-      await input.setInputFiles({ name, mimeType: 'image/png', buffer });
-      for (let i = 0; i < 30; i++) {
-        const u = (await urls())[key];
+      await input.setInputFiles({ name, mimeType: isVideo ? 'video/mp4' : 'image/png', buffer });
+      for (let i = 0; i < (isVideo ? 120 : 30); i++) {
+        const u = isVideo ? (await allUrls()).find((x) => !seen.has(x)) : (await urls())[key];
         if (u) { out[name] = u; break; }
         await page.waitForTimeout(500);
       }
