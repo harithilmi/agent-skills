@@ -6,13 +6,14 @@ Use this mode when the PR changes a React Native app. Skip steps 0–2. `headles
 
 - **Main chat never drives the sim.** Each tap re-sends its whole context (100k+), so one shot pair cost $1.30–1.70 that way. Invoke this skill instead: it forks on Sonnet with a small context.
 - **Brief (skill args)**, one line per row:
-  `<pr> | AD <agent-device path> | bundle <id> | main patch <file> | gql <endpoint> <-H headers> | row <n> <name>: <screen>, testID <id>, taps <id,id>, wait-text <api text>, state <what must show>, data <setup + restore>`
+  `<pr> | AD <agent-device path> | bundle <id> | main patch <file> | gql <endpoint> <-H headers> | row <n> <name>: <screen>, testID <id>, taps <id,id>, wait-text <api text>, state <what must show>, data <setup + restore>, dev <url,url>`
   Add the user's words ("retake row 2") and known traps.
   - Main chat fills in every testID and the tap path, so the fork never reads app source.
   - **Main patch:** commit testIDs on the branch in their own commit, then `git show <commit> > /tmp/pr-shots/<pr>/testids.patch`. The fork runs `git apply` on `main` and `git apply -R` after. Never `sed -i` a patch.
   - **Check it applies to `main` before the brief:** `T=$(mktemp); GIT_INDEX_FILE=$T git read-tree main && GIT_INDEX_FILE=$T git apply --cached --check <patch>; rm -f $T`. It checks against `main` in a temp index: no checkout, no stash, so the working tree stays untouched. For `-3`, use a throwaway `git worktree add` instead. A PR that rewrites the same file makes the branch patch miss on `main`. If it fails, try a 3-way apply in a throwaway worktree. If that fails too, write a `main`-only patch by hand and pass both.
   - Pass the `AD` path from the main chat's `device_open`, so the fork skips that call (3.5k chars).
   - **`data`:** if the row needs data state, the main chat writes the exact GraphQL body (query + variables) and the restore body. The fork never reads schema or source to build them (that cost one fork 20+ calls).
+  - **`dev`:** app-only state from an uncommitted dev hook (see "Who sets the state"). The main chat writes and applies the hook first, then lists the URLs in shot order plus `uncommitted dev hook: <files>`.
 - **Budget:** about 10 calls for a shot row (15 for a 4-shot flow row or a video row). Past that, or after 2 failed takes, stop and return `NEEDS STATE: <what is missing>`. Never write your own take script.
 - **Shoot each row in a fresh fork.** One row per invoke keeps the context small.
 - **Static by default.** Shoot PNGs, even for a navigation flow: shoot the key states in order (e.g. `[form, button] → [where it lands]`) and put them side by side in the row. Video only when the brief says `video`. Measured on one PR: a video row cost about 1M input-token equivalent (50–70 calls: record, trim, contact sheet, retake, upload); a static row cost 250–370k (13–20 calls).
@@ -36,6 +37,21 @@ The fork can't wait for the user. So:
 
 - **Easy state** (scroll to a card on a tab): the fork reaches it alone.
 - **Data or account state** (subscription status, a note on a date, a profile field): never ask the user. Run the brief's `data` body with `scripts/rn-gql.sh <bundle> <endpoint> <body.json|-> [-H …]`. It takes the token from the app's storage and prints capped JSON. Then `$AD open <bundle> --relaunch --metro-port <port>` + `$AD wait text "<api text>" 30000`. `metro reload` is not enough after a data change: the screen keeps the old API result. Run the restore body after the last shot.
+- **App-only state** (a store value, a feature flag, mock data, a screen not reachable yet, the language): the **main chat** adds a throwaway dev hook before invoking. It stays uncommitted, and the brief lists its URLs. The fork just opens them: `$AD open <bundle> <scheme>://dev/<verb>/<arg>`. Cheaper than tapping through settings, and it works where no path exists yet.
+  - **Pattern:** one `__DEV__`-only `Linking.addEventListener('url', …)` that matches `dev/<verb>/<arg>` and sets state directly (`useXStore.getState().setY(arg)`, `i18n.changeLanguage(arg)`). For a screen nothing links to yet, add a `__DEV__`-only path to the React Navigation linking config (`dev/nav/<Route>`).
+  - **Catch-all trap:** if the linking config has a `'*'` route, the dev URL also navigates there. Add `filter: (url) => !(__DEV__ && url.includes('dev/'))` to `linking`, unless the hook *is* a nav path.
+    ```ts
+    // app/devtools/devLinks.ts (uncommitted). Call listenDevLinks() in the app's __DEV__ block.
+    export const listenDevLinks = () =>
+      Linking.addEventListener('url', ({ url }) => {
+        const [verb, arg] = url.split('dev/')[1]?.split('/') ?? [];
+        if (verb === 'lang') i18n.changeLanguage(arg);
+        if (verb === 'premium') useProfileStore.getState().setPremium(arg === '1');
+      });
+    ```
+  - **Never commit it.** Stage by path, never `git add -A`. A hunk in a shared file (`app.tsx`, the navigator) goes through `git add -p`. The brief says `uncommitted dev hook: <files>`, so the fork never stashes it away. If the team would keep using it, it gets its own small PR (an app PR did that for the language link). Then it can stay applied uncommitted on feature branches until that PR merges.
+  - **Not for API data:** data the backend owns goes through `rn-gql.sh` (above). A hook faking it shows a state the real app can't reach.
+  - **Fork side:** a state that needs a hook and the brief has none → `NEEDS STATE: dev hook <what it must set>`. Never tap through 5 settings screens instead.
 - **Hard state** (sheet open mid-gesture, a flow with no API, a login that needs a password or OTP): don't try. Return `NEEDS STATE: <branch>, open <exact steps>`. The main chat relays it. The user replies "done", and the main chat re-invokes with `state ready`. Then the fork only crops (about 2 calls).
 - **Fork failed twice** on an easy state: return `NEEDS STATE` too. Never retry a third time.
 
@@ -61,6 +77,13 @@ The fork can't wait for the user. So:
   2. Reload (`--reload`) after every branch switch and every `git apply`/`-R`. Fast Refresh may miss either.
   3. Waits after reload, taps and animations are in `rn-shot.sh`. Always pass `--wait-text` with text from the API: tapping during a refetch can close a sheet you just opened. Bottom-sheet content may be missing from the accessibility tree, so verify by `testID` only.
   4. After 2 failed tries, return `NEEDS STATE` (see above).
+- **Per-locale shots: use a dev language link, not the Language screen** (an app-only state hook, see "Who sets the state"). Check the app for one before navigating through settings. Example App (my-app, bundle `com.example.app`) has `myapp://dev/lang/<code>`, codes `en bm km zh-cn id tl th vi` (source: `app/devtools/devLanguageLink.ts`, `__DEV__` builds only; a PR, kept uncommitted on feature branches until it merges). A feature branch also has `myapp://dev/nav/<Route>` for its result screens:
+  ```bash
+  $AD open com.example.app myapp://dev/lang/bm
+  ```
+  - It switches language in place: no navigation, and an open dialog stays open. So shoot one screen, switch, shoot again.
+  - Use `myapp://`, not `otherapp://`. The `otherapp` scheme is not in the iOS Info.plist, so it fails with "Simulator device failed to open".
+  - Restore with `.../lang/en` after the last shot.
 - **Data:** the shot shows whatever the logged-in account has today. Before you shoot, check that it hits the state the PR changes, for example a value with no icon. If not, pick another date or record in the app.
 - **Sizes:** the crop is tight on the element, with no padding. If before and after differ in height, pad the smaller one with `ffmpeg -vf pad=W:H:0:0:white`.
 - **Check:** use one tile. `ffmpeg -i b.png -i a.png -filter_complex "[0]scale=500:-1[a];[1]scale=500:-1[b];[a][b]hstack" pair.png`. `Read` only `pair.png`.
