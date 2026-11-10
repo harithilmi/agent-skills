@@ -60,13 +60,13 @@ If a tool call comes back "interrupted", look at the files before you run it aga
 
 ## 3. Check with one image, once
 
-`headless.cjs shoot` writes `<dir>/sheet.png` by itself after each run. `Read` that file, never a single shot PNG. For a sheet across several folders, make **one** contact sheet of **all** shots of the job, from all PRs:
+`headless.cjs shoot` writes `<dir>/sheet.png` by itself after each run. For a sheet across several folders, make **one** contact sheet of **all** shots of the job, from all PRs:
 
 ```bash
 NODE_PATH=<repo>/node_modules node <skill>/scripts/sheet.js /tmp/pr-shots/sheet.png <all pngs>
 ```
 
-`Read` only `sheet.png`, and only once per job. Do not read a sheet for each batch, and never read a full-size PNG. The warnings in step 2 find most problems without images. The sheet finds what they cannot: wrong data on screen (for example a list that did not re-sort yet) or a label in a bad place. If a shot is bad, fix it, run it again, and check it with a sheet of only the fixed shots.
+`Read` only `sheet.png`, and only once per job. Do not read a sheet for each batch, and never read a full-size PNG: to check a detail, crop and resize with sharp first. The warnings in step 2 find most problems without images. The sheet finds what they cannot: wrong data on screen (for example a list that did not re-sort yet) or a label in a bad place. If a shot is bad, fix it, run it again, and check it with a sheet of only the fixed shots.
 
 ## 4. Upload and edit the PR
 

@@ -72,7 +72,6 @@ The fork can't wait for the user. So:
   - **Not for API data:** data the backend owns goes through `rn-gql.sh` (above). A hook faking it shows a state the real app can't reach.
   - **Fork side:** a state that needs a hook and the brief has none → `NEEDS STATE: dev hook <what it must set>`. Never tap through 5 settings screens instead.
 - **Hard state** (sheet open mid-gesture, a flow with no API, a login that needs a password or OTP): don't try. Return `NEEDS STATE: <branch>, open <exact steps>`. The main chat relays it. The user replies "done", and the main chat re-invokes with `state ready`. Then the fork only crops (about 2 calls).
-- **Fork failed twice** on an easy state: return `NEEDS STATE` too. Never retry a third time.
 
 ## Driving rules
 
@@ -98,7 +97,6 @@ The fork can't wait for the user. So:
   1. Shoot every "after" on the branch first. Then switch to `main` once and patch all the temporary `testID`s in one go. Keep that patch until the last "before" is done.
   2. Reload (`--reload`) after every branch switch and every `git apply`/`-R`. Fast Refresh may miss either.
   3. Waits after reload, taps and animations are in `rn-shot.sh`. Always pass `--wait-text` with text from the API: tapping during a refetch can close a sheet you just opened. Bottom-sheet content may be missing from the accessibility tree, so verify by `testID` only.
-  4. After 2 failed tries, return `NEEDS STATE` (see above).
 - **Per-locale shots: use a dev language link, not the Language screen** (an app-only state hook, see "Who sets the state"). Check the project notes for one before navigating through settings. If the notes name a patch, `git apply` it, reload, and `git apply -R` it when done if the branch didn't have it.
   ```bash
   $AD open <bundle> <scheme>://dev/lang/<code>

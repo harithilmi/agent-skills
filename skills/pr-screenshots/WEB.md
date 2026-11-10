@@ -106,4 +106,3 @@ Gotchas from past runs:
 - An outline on a heading with ellipsis (`overflow:hidden`) gets clipped. Add `"css": "h6{overflow:visible!important}"`.
 - The CDP connection has no `context.grantPermissions` or `setGeolocation`. Stub it in `setup`: `page.addInitScript(() => { navigator.geolocation.getCurrentPosition = (ok) => setTimeout(() => ok({ coords: { latitude: 3.139, longitude: 101.6869, accuracy: 10 }, timestamp: Date.now() }), 50); })`.
 - Many PRs: use one worktree with a detached HEAD and one dev server. Switch with `git checkout --detach origin/<branch>`; Turbopack reloads in a few seconds. Take all "before" shots while it is on `origin/main`.
-- `Read` only the contact sheet, never a full-size PNG (a 2000 px shot costs about 3x the tokens). To check a detail, crop and resize with sharp first.
