@@ -1,2 +1,5 @@
 # Saved shot recipes are local to each person
 skills/pr-screenshots/jobs/
+
+# Dev-hook patches hold app code from other repos: local only
+skills/pr-screenshots/patches/
