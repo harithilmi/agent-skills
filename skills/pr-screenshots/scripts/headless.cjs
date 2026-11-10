@@ -18,8 +18,8 @@ const SUPPORT = path.join(os.homedir(), 'Library/Application Support');
 // Chromium browsers on macOS: [app, binary, user data dir]. First installed one wins.
 // Override with PR_SHOTS_BROWSER=<name>, e.g. PR_SHOTS_BROWSER=brave.
 const BROWSERS = {
-  chrome: ['Google Chrome', 'Google Chrome', 'Google/Chrome'],
   helium: ['Helium', 'Helium', 'net.imput.helium'],
+  chrome: ['Google Chrome', 'Google Chrome', 'Google/Chrome'],
   brave: ['Brave Browser', 'Brave Browser', 'BraveSoftware/Brave-Browser'],
   edge: ['Microsoft Edge', 'Microsoft Edge', 'Microsoft Edge'],
   arc: ['Arc', 'Arc', 'Arc/User Data'],

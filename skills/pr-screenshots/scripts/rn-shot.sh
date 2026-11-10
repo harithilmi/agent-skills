@@ -9,6 +9,9 @@
 #   --hold <testID>     scroll to + long-press 1.5s, then settle (step)
 #   --back              in-app back, then settle (step)
 #   --full              full-screen shot once <testID> is visible (no crop)
+#   --long              whole scroll view as one tall PNG: scroll top, pan + shoot until the screen stops moving,
+#                       stitch on quiet rows (stitch.py). <testID> is unused (pass -). The pan starts at PAN_Y
+#                       (env, default 520 pt) to miss carousels near the top: a swipe that starts on one doesn't scroll.
 #   --record            video: reach <testID>, start recording, run the steps, stop. <out> must be .mp4.
 #                       Tool overhead freezes the screen 5-12s per step, so every still stretch is cut to HOLD
 #                       seconds (env, default 0.8) and the clip is scaled to 590px wide for GitHub. Raw: <out>.raw.mp4
@@ -17,11 +20,12 @@ AD=${AD:?set AD to the agent-device path from device_open}
 [ $# -ge 2 ] || { echo "FAIL args: rn-shot.sh <out.png> <testID> [--reload] [--wait-text t] [--tap|--hold id]... [--back] [--full] [--record]"; exit 2; }
 out=$1 target=$2
 shift 2
-reload='' text='' full='' record='' rec_on='' steps=()
+reload='' text='' full='' long='' record='' rec_on='' steps=()
 while [ $# -gt 0 ]; do
   case $1 in
     --reload) reload=1 ;;
     --full) full=1 ;;
+    --long) long=1 ;;
     --wait-text) text=$2; shift ;;
     --record) record=1 ;;
     --tap) steps+=("tap $2"); shift ;;
@@ -87,6 +91,21 @@ if [ -n "$record" ]; then
 fi
 
 run_steps
+if [ -n "$long" ]; then
+  frames=$(mktemp -d) prev='' n=0
+  try top scroll top; ad wait stable 1000 8000
+  while [ $n -lt 15 ]; do
+    f="$frames/$(printf %02d $n).png"
+    try shot screenshot "$f"
+    h=$(md5 -q "$f")
+    [ "$h" = "$prev" ] && { rm "$f"; break; }  # same frame twice = bottom reached
+    prev=$h n=$((n + 1))
+    ad gesture pan 200 "${PAN_Y:-520}" 0 -434 2000; ad wait stable 1000 6000
+  done
+  uv run -q --with pillow --with numpy python "$(dirname "$0")/stitch.py" "$out" "$frames"/*.png >"$log" 2>&1 || fail stitch
+  echo "OK $out $(tail -1 "$log") ($n frames)"
+  rm -rf "${frames:?}" "$log"; exit 0
+fi
 reach "$target"
 ad wait stable 1000 8000
 if [ -n "$full" ]; then
